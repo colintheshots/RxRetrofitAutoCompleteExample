@@ -25,5 +25,10 @@ proguard/
 # Log Files
 *.log
 
+# Standard Android Studio ignores
+/.idea/workspace.xml
+/.idea/libraries
+.DS_Store
+
 # Other
 Secrets.java
