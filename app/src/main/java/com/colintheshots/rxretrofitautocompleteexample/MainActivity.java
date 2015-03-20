@@ -1,7 +1,6 @@
 package com.colintheshots.rxretrofitautocompleteexample;
 
 import android.app.Activity;
-import android.gesture.Prediction;
 import android.os.Bundle;
 import android.util.Log;
 import android.view.Menu;
@@ -11,7 +10,6 @@ import android.widget.EditText;
 import android.widget.ListView;
 import android.widget.Toast;
 
-import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 import com.google.gson.annotations.Expose;
 
@@ -23,24 +21,16 @@ import java.util.concurrent.TimeUnit;
 
 import butterknife.ButterKnife;
 import butterknife.InjectView;
-import butterknife.OnTextChanged;
-import retrofit.RequestInterceptor;
 import retrofit.RestAdapter;
 import retrofit.converter.GsonConverter;
 import retrofit.http.GET;
-import retrofit.http.Path;
 import retrofit.http.Query;
 import rx.Observable;
-import rx.Observer;
-import rx.Subscription;
-import rx.android.observables.AndroidObservable;
 import rx.android.observables.ViewObservable;
 import rx.android.schedulers.AndroidSchedulers;
+import rx.exceptions.OnErrorThrowable;
 import rx.functions.Action1;
 import rx.functions.Func1;
-import rx.schedulers.Schedulers;
-import rx.subjects.PublishSubject;
-import rx.subscriptions.CompositeSubscription;
 
 
 public class MainActivity extends Activity {
@@ -67,7 +57,6 @@ public class MainActivity extends Activity {
 
     private static final String LOG_TAG = "RxRetrofitAutoComplete";
     private static final String GOOGLE_API_BASE_URL = "https://maps.googleapis.com";
-    private static final String API_KEY = "XXX";
     private static final int DELAY = 500;
 
     GooglePlacesClient mGooglePlacesClient;
@@ -81,7 +70,7 @@ public class MainActivity extends Activity {
         setContentView(R.layout.activity_main);
         ButterKnife.inject(this);
 
-        if (API_KEY.length()<10) {
+        if (Secrets.API_KEY.length()<10) {
             Toast.makeText(this, "API KEY is unset!", Toast.LENGTH_LONG).show();
             return;
         }
@@ -96,49 +85,28 @@ public class MainActivity extends Activity {
 
         Observable<EditText> searchTextObservable = ViewObservable.text(editText);
         searchTextObservable.debounce(DELAY, TimeUnit.MILLISECONDS)
-                .map(new Func1<EditText, String>() {
-                    @Override
-                    public String call(EditText editText) {
-                        return editText.getText().toString();
+                .map(editText1 -> editText1.getText().toString())
+                .flatMap(searchTerm -> {
+                    Observable<PlacesResult> placesResult = null;
+                    try {
+                        placesResult = mGooglePlacesClient.autocomplete(Secrets.API_KEY, URLEncoder.encode(searchTerm, "utf8"));
+                    } catch (UnsupportedEncodingException e){
+                        e.printStackTrace();
                     }
+                    return placesResult;
                 })
                 .observeOn(AndroidSchedulers.mainThread())
-                .subscribe(new Action1<String>() {
-                    @Override
-                    public void call(String s) {
-                        Log.d(LOG_TAG, s);
-                        try {
-                            mGooglePlacesClient
-                                    .autocomplete(API_KEY, URLEncoder.encode(s, "utf8"))
-                                    .observeOn(AndroidSchedulers.mainThread())
-                                    .subscribe(new Action1<PlacesResult>() {
-                                        @Override
-                                        public void call(PlacesResult placesResult) {
-                                            List<String> strings = new ArrayList<String>();
-                                            for (MainActivity.Prediction p : placesResult.predictions) {
-                                                strings.add(p.description);
-                                            }
-                                            ListView listView = (ListView) findViewById(R.id.listView1);
-                                            if (listView != null) {
-                                                listView.setAdapter(new ArrayAdapter<String>(MainActivity.this, android.R.layout.simple_list_item_1, strings));
-                                            }
-                                        }
-                                    }, new Action1<Throwable>() {
-                                        @Override
-                                        public void call(Throwable throwable) {
-                                            throwable.printStackTrace();
-                                        }
-                                    });
-                        } catch (UnsupportedEncodingException e) {
-                            e.printStackTrace();
+                .subscribe(placesResult ->
+                    {
+                        List<String> strings = new ArrayList<String>();
+                        for (MainActivity.Prediction p : placesResult.predictions) {
+                            strings.add(p.description);
                         }
-                    }
-                }, new Action1<Throwable>() {
-                    @Override
-                    public void call(Throwable throwable) {
-                        throwable.printStackTrace();
-                    }
-                });
+                        ListView listView = (ListView) findViewById(R.id.listView1);
+                        if (listView != null) {
+                            listView.setAdapter(new ArrayAdapter<String>(MainActivity.this, android.R.layout.simple_list_item_1, strings));
+                        }
+                    }, Throwable::printStackTrace);
     }
 
 
