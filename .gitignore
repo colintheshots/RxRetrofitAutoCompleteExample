@@ -32,3 +32,5 @@ proguard/
 
 # Other
 Secrets.java
+
+workspace.xml
